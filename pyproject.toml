@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bookletcreator"
+version = "0.1.0"
+description = "Create print-ready booklet PDFs from regular PDFs"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "Madalene Gravina" }
+]
+dependencies = [
+  "pypdf>=4.0.0",
+  "reportlab>=4.0.0"
+]
+keywords = ["pdf", "booklet", "printing", "imposition"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Utilities"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "build>=1.2.0",
+  "twine>=5.0.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/<your-username>/bookletcreator"
+Repository = "https://github.com/<your-username>/bookletcreator"
+Issues = "https://github.com/<your-username>/bookletcreator/issues"
+
+[project.scripts]
+bookletcreator = "bookletcreator.cli:main"
+bookletcreator-gui = "bookletcreator.gui:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
