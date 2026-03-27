@@ -27,5 +27,5 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - GitHub Actions publish workflow for PyPI trusted publishing.
 - Documentation, license, and repository hygiene files.
 
-[Unreleased]: https://github.com/<your-username>/bookletcreator/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/<your-username>/bookletcreator/releases/tag/v0.1.0
+[Unreleased]: https://github.com/madal3ne/bookletcreator/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/madal3ne/bookletcreator/releases/tag/v0.1.0

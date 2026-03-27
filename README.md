@@ -10,6 +10,7 @@ BookletCreator turns a regular PDF into a print-ready booklet PDF (imposed for d
 - Accepts pasted Unicode dashes in CLI flags
 - Optional paper target (`AUTO`, `A4`, `LETTER`)
 - Optional inner margin (gutter) between booklet panels
+- Signature splitting (4, 8, 16 pages, etc.) for stitched sections
 - Dry-run mode and spread mapping preview
 - Desktop GUI app for non-technical users
 
@@ -40,6 +41,14 @@ bookletcreator input.pdf
 bookletcreator input.pdf -o output_booklet.pdf --add-page-numbers
 ```
 
+### CLI: signatures (stitched sections)
+
+```bash
+bookletcreator input.pdf --signature-size 16
+```
+
+This creates multiple outputs like `input_sig01.pdf`, `input_sig02.pdf`, ...
+
 ### CLI: custom layout and preview
 
 ```bash
@@ -68,6 +77,7 @@ python .\booklet_maker.py .\input.pdf --add-page-numbers
 - `--bottom-margin N`: number position from bottom in points (default `18`)
 - `--paper-size {AUTO,A4,LETTER}`: panel paper size target
 - `--inner-margin N`: gap between left/right panel in points
+- `--signature-size N`: split into N-page signatures (multiple of 4)
 - `--show-map`: print spread mapping
 - `--dry-run`: run without writing output
 

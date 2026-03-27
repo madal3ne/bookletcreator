@@ -7,11 +7,14 @@ from tkinter import filedialog, messagebox, ttk
 from .cli import PAPER_SIZES, convert_booklet
 
 
+SIGNATURE_CHOICES = ["None", "4", "8", "12", "16", "20", "24", "32"]
+
+
 class BookletCreatorGUI:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("BookletCreator")
-        self.root.geometry("640x430")
+        self.root.geometry("660x470")
         self.root.resizable(False, False)
 
         self.input_path = tk.StringVar()
@@ -22,6 +25,7 @@ class BookletCreatorGUI:
         self.bottom_margin = tk.StringVar(value="18")
         self.paper_size = tk.StringVar(value="AUTO")
         self.inner_margin = tk.StringVar(value="0")
+        self.signature_size = tk.StringVar(value="None")
         self.show_map = tk.BooleanVar(value=False)
 
         self._build_ui()
@@ -34,7 +38,7 @@ class BookletCreatorGUI:
         ttk.Entry(frame, textvariable=self.input_path, width=60).grid(row=1, column=0, sticky="we", padx=(0, 8))
         ttk.Button(frame, text="Browse", command=self.pick_input).grid(row=1, column=1)
 
-        ttk.Label(frame, text="Output PDF").grid(row=2, column=0, sticky="w", pady=(12, 0))
+        ttk.Label(frame, text="Output PDF / Folder").grid(row=2, column=0, sticky="w", pady=(12, 0))
         ttk.Entry(frame, textvariable=self.output_path, width=60).grid(row=3, column=0, sticky="we", padx=(0, 8))
         ttk.Button(frame, text="Browse", command=self.pick_output).grid(row=3, column=1)
 
@@ -55,7 +59,9 @@ class BookletCreatorGUI:
         paper_values = ["AUTO", *PAPER_SIZES.keys()]
         ttk.Combobox(layout, textvariable=self.paper_size, values=paper_values, width=12, state="readonly").grid(row=1, column=0, padx=(0, 12))
         ttk.Label(layout, text="Inner Margin").grid(row=0, column=1, sticky="w")
-        ttk.Entry(layout, textvariable=self.inner_margin, width=12).grid(row=1, column=1)
+        ttk.Entry(layout, textvariable=self.inner_margin, width=12).grid(row=1, column=1, padx=(0, 12))
+        ttk.Label(layout, text="Signature Size").grid(row=0, column=2, sticky="w")
+        ttk.Combobox(layout, textvariable=self.signature_size, values=SIGNATURE_CHOICES, width=12, state="readonly").grid(row=1, column=2)
 
         ttk.Checkbutton(frame, text="Show spread mapping in console", variable=self.show_map).grid(row=7, column=0, sticky="w", pady=(12, 0))
 
@@ -79,12 +85,18 @@ class BookletCreatorGUI:
 
     def pick_output(self) -> None:
         path = filedialog.asksaveasfilename(
-            title="Choose output PDF",
+            title="Choose output PDF or base name",
             defaultextension=".pdf",
             filetypes=[("PDF files", "*.pdf")],
         )
         if path:
             self.output_path.set(path)
+
+    def _signature_value(self) -> int:
+        raw = self.signature_size.get().strip()
+        if not raw or raw.lower() == "none":
+            return 0
+        return int(raw)
 
     def create_booklet(self) -> None:
         in_path = self.input_path.get().strip()
@@ -95,7 +107,7 @@ class BookletCreatorGUI:
             return
 
         try:
-            result = convert_booklet(
+            results = convert_booklet(
                 input_pdf=Path(in_path),
                 output_pdf=Path(out_path) if out_path else None,
                 add_page_numbers=self.add_numbers.get(),
@@ -104,6 +116,7 @@ class BookletCreatorGUI:
                 bottom_margin=float(self.bottom_margin.get()),
                 paper_size=self.paper_size.get(),
                 inner_margin=float(self.inner_margin.get()),
+                signature_size=self._signature_value(),
                 show_map=self.show_map.get(),
                 dry_run=False,
             )
@@ -112,15 +125,15 @@ class BookletCreatorGUI:
             messagebox.showerror("Error", str(exc))
             return
 
-        self.status.set(f"Created: {result.output_path}")
-        messagebox.showinfo(
-            "Success",
-            "Booklet created successfully.\n\n"
-            f"Input pages: {result.input_pages}\n"
-            f"Output spreads: {result.output_spreads}\n"
-            f"Added blanks: {result.added_blanks}\n"
-            f"Output: {result.output_path}",
+        self.status.set(f"Created {len(results)} file(s)")
+        first = results[0]
+        summary = (
+            f"Created {len(results)} file(s).\n\n"
+            f"Input pages: {sum(r.input_pages for r in results)}\n"
+            f"Added blanks: {sum(r.added_blanks for r in results)}\n"
+            f"Output folder: {first.output_path.parent}"
         )
+        messagebox.showinfo("Success", summary)
 
 
 def main() -> None:
