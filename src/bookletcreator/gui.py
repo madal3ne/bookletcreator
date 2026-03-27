@@ -26,6 +26,8 @@ class BookletCreatorGUI:
         self.paper_size = tk.StringVar(value="AUTO")
         self.inner_margin = tk.StringVar(value="0")
         self.signature_size = tk.StringVar(value="None")
+        self.combine_signatures = tk.BooleanVar(value=False)
+        self.only_combined = tk.BooleanVar(value=False)
         self.show_map = tk.BooleanVar(value=False)
 
         self._build_ui()
@@ -63,12 +65,15 @@ class BookletCreatorGUI:
         ttk.Label(layout, text="Signature Size").grid(row=0, column=2, sticky="w")
         ttk.Combobox(layout, textvariable=self.signature_size, values=SIGNATURE_CHOICES, width=12, state="readonly").grid(row=1, column=2)
 
-        ttk.Checkbutton(frame, text="Show spread mapping in console", variable=self.show_map).grid(row=7, column=0, sticky="w", pady=(12, 0))
+        ttk.Checkbutton(frame, text="Combine signatures into one PDF", variable=self.combine_signatures).grid(row=7, column=0, sticky="w", pady=(12, 0))
+        ttk.Checkbutton(frame, text="Only combined output (no per-signature files)", variable=self.only_combined).grid(row=8, column=0, sticky="w", pady=(6, 0))
 
-        ttk.Button(frame, text="Create Booklet", command=self.create_booklet).grid(row=8, column=0, sticky="w", pady=(18, 0))
+        ttk.Checkbutton(frame, text="Show spread mapping in console", variable=self.show_map).grid(row=9, column=0, sticky="w", pady=(6, 0))
+
+        ttk.Button(frame, text="Create Booklet", command=self.create_booklet).grid(row=10, column=0, sticky="w", pady=(18, 0))
 
         self.status = tk.StringVar(value="Ready")
-        ttk.Label(frame, textvariable=self.status).grid(row=9, column=0, columnspan=2, sticky="w", pady=(14, 0))
+        ttk.Label(frame, textvariable=self.status).grid(row=11, column=0, columnspan=2, sticky="w", pady=(14, 0))
 
         frame.columnconfigure(0, weight=1)
 
@@ -107,7 +112,7 @@ class BookletCreatorGUI:
             return
 
         try:
-            results = convert_booklet(
+            results, combined = convert_booklet(
                 input_pdf=Path(in_path),
                 output_pdf=Path(out_path) if out_path else None,
                 add_page_numbers=self.add_numbers.get(),
@@ -117,6 +122,8 @@ class BookletCreatorGUI:
                 paper_size=self.paper_size.get(),
                 inner_margin=float(self.inner_margin.get()),
                 signature_size=self._signature_value(),
+                combine_signatures=self.combine_signatures.get(),
+                only_combined=self.only_combined.get(),
                 show_map=self.show_map.get(),
                 dry_run=False,
             )
@@ -125,14 +132,19 @@ class BookletCreatorGUI:
             messagebox.showerror("Error", str(exc))
             return
 
-        self.status.set(f"Created {len(results)} file(s)")
+        total_files = len(results) + (1 if combined is not None else 0)
+        self.status.set(f"Created {total_files} file(s)")
         first = results[0]
-        summary = (
-            f"Created {len(results)} file(s).\n\n"
-            f"Input pages: {sum(r.input_pages for r in results)}\n"
-            f"Added blanks: {sum(r.added_blanks for r in results)}\n"
-            f"Output folder: {first.output_path.parent}"
-        )
+        summary_lines = [
+            f"Created {total_files} file(s).",
+            "",
+            f"Input pages: {sum(r.input_pages for r in results)}",
+            f"Added blanks: {sum(r.added_blanks for r in results)}",
+            f"Output folder: {first.output_path.parent}",
+        ]
+        if combined is not None:
+            summary_lines.append(f"Combined output: {combined.output_path.name}")
+        summary = "\n".join(summary_lines)
         messagebox.showinfo("Success", summary)
 
 

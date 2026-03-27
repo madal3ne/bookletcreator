@@ -47,6 +47,11 @@ class ConversionResult:
     signature_count: int
 
 
+@dataclass(frozen=True)
+class CombinedResult:
+    output_path: Path
+
+
 DASH_TRANSLATION = str.maketrans(
     {
         "\u2010": "-",
@@ -122,6 +127,16 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         type=int,
         default=0,
         help="Split into signatures of N pages (must be multiple of 4). 0 disables.",
+    )
+    parser.add_argument(
+        "--combine-signatures",
+        action="store_true",
+        help="When using signatures, also write a single combined output PDF.",
+    )
+    parser.add_argument(
+        "--only-combined",
+        action="store_true",
+        help="When using signatures, write only the combined PDF (no per-signature files).",
     )
     parser.add_argument(
         "--dry-run",
@@ -313,6 +328,23 @@ def build_output_paths(
     return paths
 
 
+def build_combined_output_path(
+    input_pdf: Path,
+    output_pdf: Optional[Path],
+    signature_count: int,
+) -> Path:
+    if signature_count == 1:
+        return output_pdf or input_pdf.with_name(f"{input_pdf.stem}_booklet.pdf")
+
+    if output_pdf is None:
+        return input_pdf.with_name(f"{input_pdf.stem}_booklet.pdf")
+
+    if output_pdf.exists() and output_pdf.is_dir():
+        return output_pdf / f"{input_pdf.stem}_booklet.pdf"
+
+    return output_pdf
+
+
 def convert_booklet(
     input_pdf: Path,
     output_pdf: Optional[Path] = None,
@@ -323,9 +355,11 @@ def convert_booklet(
     paper_size: str = "AUTO",
     inner_margin: float = 0,
     signature_size: int = 0,
+    combine_signatures: bool = False,
+    only_combined: bool = False,
     show_map: bool = False,
     dry_run: bool = False,
-) -> list[ConversionResult]:
+) -> tuple[list[ConversionResult], Optional[CombinedResult]]:
     input_pdf = Path(input_pdf)
     if not input_pdf.exists():
         raise FileNotFoundError(f"Input PDF not found: {input_pdf}")
@@ -361,6 +395,9 @@ def convert_booklet(
     results: list[ConversionResult] = []
     offset = 0
     total_pages = len(pages)
+    if only_combined:
+        combine_signatures = True
+    combined_writer = PdfWriter() if combine_signatures and len(signatures) > 1 else None
 
     for sig_idx, (sig_pages, out_path) in enumerate(zip(signatures, outputs), start=1):
         writer, original_count, padded_count = impose_booklet_pages(
@@ -373,7 +410,11 @@ def convert_booklet(
             signature_index=sig_idx,
         )
 
-        if not dry_run:
+        if combined_writer is not None:
+            for page in writer.pages:
+                combined_writer.add_page(page)
+
+        if not dry_run and not (only_combined and len(signatures) > 1):
             out_path.parent.mkdir(parents=True, exist_ok=True)
             with out_path.open("wb") as f:
                 writer.write(f)
@@ -391,14 +432,23 @@ def convert_booklet(
         )
         offset += original_count
 
-    return results
+    combined_result: Optional[CombinedResult] = None
+    if combined_writer is not None:
+        combined_path = build_combined_output_path(input_pdf, output_pdf, len(signatures))
+        if not dry_run:
+            combined_path.parent.mkdir(parents=True, exist_ok=True)
+            with combined_path.open("wb") as f:
+                combined_writer.write(f)
+        combined_result = CombinedResult(output_path=combined_path)
+
+    return results, combined_result
 
 
 def run(argv: Optional[list[str]] = None) -> int:
     normalized_argv = normalize_cli_args(argv or sys.argv[1:])
     args = parse_args(normalized_argv)
 
-    results = convert_booklet(
+    results, combined = convert_booklet(
         input_pdf=args.input_pdf,
         output_pdf=args.output,
         add_page_numbers=args.add_page_numbers,
@@ -408,6 +458,8 @@ def run(argv: Optional[list[str]] = None) -> int:
         paper_size=args.paper_size,
         inner_margin=args.inner_margin,
         signature_size=args.signature_size,
+        combine_signatures=args.combine_signatures,
+        only_combined=args.only_combined,
         show_map=args.show_map,
         dry_run=args.dry_run,
     )
@@ -426,9 +478,13 @@ def run(argv: Optional[list[str]] = None) -> int:
         print("Dry run enabled: no output files written.")
         return 0
 
-    for result in results:
-        label = f"Signature {result.signature_index}/{result.signature_count}"
-        print(f"{label} created: {result.output_path}")
+    if not (args.only_combined and results[0].signature_count > 1):
+        for result in results:
+            label = f"Signature {result.signature_index}/{result.signature_count}"
+            print(f"{label} created: {result.output_path}")
+
+    if combined is not None:
+        print(f"Combined output created: {combined.output_path}")
 
     return 0
 

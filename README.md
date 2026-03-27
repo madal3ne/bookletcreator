@@ -49,6 +49,18 @@ bookletcreator input.pdf --signature-size 16
 
 This creates multiple outputs like `input_sig01.pdf`, `input_sig02.pdf`, ...
 
+To also produce a single combined PDF:
+
+```bash
+bookletcreator input.pdf --signature-size 16 --combine-signatures
+```
+
+To produce only a single combined PDF (no per-signature files):
+
+```bash
+bookletcreator input.pdf --signature-size 16 --only-combined
+```
+
 ### CLI: custom layout and preview
 
 ```bash
@@ -78,6 +90,8 @@ python .\booklet_maker.py .\input.pdf --add-page-numbers
 - `--paper-size {AUTO,A4,LETTER}`: panel paper size target
 - `--inner-margin N`: gap between left/right panel in points
 - `--signature-size N`: split into N-page signatures (multiple of 4)
+- `--combine-signatures`: when signatures are used, also write a combined PDF
+- `--only-combined`: when signatures are used, write only the combined PDF
 - `--show-map`: print spread mapping
 - `--dry-run`: run without writing output
 
