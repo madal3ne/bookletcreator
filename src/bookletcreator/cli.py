@@ -5,7 +5,7 @@ import sys
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Optional
 
 try:
     from pypdf import PdfReader, PdfWriter, Transformation
@@ -14,11 +14,16 @@ except ModuleNotFoundError as exc:  # pragma: no cover
         "Missing dependency 'pypdf'. Install with: python -m pip install pypdf"
     ) from exc
 
+from .text_layout import (
+    PAGE_SIZES,
+    SIZE_UNITS,
+    TextLayoutOptions,
+    render_text_to_pdf_bytes,
+    resolve_page_size,
+)
 
-PAPER_SIZES = {
-    "A4": (595.28, 841.89),
-    "LETTER": (612.0, 792.0),
-}
+PAPER_SIZES = PAGE_SIZES
+SHEET_LAYOUTS = ("BOOKLET", "FOUR_UP")
 
 
 @dataclass(frozen=True)
@@ -34,6 +39,7 @@ class LayoutOptions:
     panel_width: float
     panel_height: float
     inner_margin: float
+    sheet_layout: str
 
 
 @dataclass(frozen=True)
@@ -50,6 +56,12 @@ class ConversionResult:
 @dataclass(frozen=True)
 class CombinedResult:
     output_path: Path
+
+
+@dataclass(frozen=True)
+class SourceDocument:
+    reader: PdfReader
+    source_label: str
 
 
 DASH_TRANSLATION = str.maketrans(
@@ -77,9 +89,9 @@ def normalize_cli_args(argv: list[str]) -> list[str]:
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Convert a PDF into booklet-imposed spreads for duplex printing."
+        description="Convert a PDF or text file into booklet-imposed spreads for duplex printing."
     )
-    parser.add_argument("input_pdf", type=Path, help="Path to the source PDF.")
+    parser.add_argument("input_pdf", type=Path, help="Path to the source PDF or text file.")
     parser.add_argument(
         "-o",
         "--output",
@@ -112,15 +124,81 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--paper-size",
         type=str.upper,
-        choices=["AUTO", *PAPER_SIZES.keys()],
+        choices=["AUTO", "CUSTOM", *PAPER_SIZES.keys()],
         default="AUTO",
         help="Target single-page paper size for each booklet panel (default: AUTO).",
+    )
+    parser.add_argument(
+        "--paper-width",
+        type=float,
+        help="Custom booklet panel width in PDF points when --paper-size CUSTOM is used.",
+    )
+    parser.add_argument(
+        "--paper-height",
+        type=float,
+        help="Custom booklet panel height in PDF points when --paper-size CUSTOM is used.",
+    )
+    parser.add_argument(
+        "--paper-unit",
+        type=str.upper,
+        choices=list(SIZE_UNITS.keys()),
+        default="PT",
+        help="Unit for custom booklet dimensions: PT, IN, CM, or MM (default: PT).",
+    )
+    parser.add_argument(
+        "--text-page-size",
+        type=str.upper,
+        choices=["CUSTOM", *PAPER_SIZES.keys()],
+        default="A5",
+        help="Page size to use when the input is a text file (default: A5).",
+    )
+    parser.add_argument(
+        "--text-page-width",
+        type=float,
+        help="Custom text page width in PDF points when --text-page-size CUSTOM is used.",
+    )
+    parser.add_argument(
+        "--text-page-height",
+        type=float,
+        help="Custom text page height in PDF points when --text-page-size CUSTOM is used.",
+    )
+    parser.add_argument(
+        "--text-page-unit",
+        type=str.upper,
+        choices=list(SIZE_UNITS.keys()),
+        default="PT",
+        help="Unit for custom text-page dimensions: PT, IN, CM, or MM (default: PT).",
+    )
+    parser.add_argument(
+        "--body-font-size",
+        type=float,
+        default=12,
+        help="Body font size when the input is a text file (default: 12).",
+    )
+    parser.add_argument(
+        "--text-margin",
+        type=float,
+        default=54,
+        help="Margin in PDF points for text-file layout (default: 54).",
+    )
+    parser.add_argument(
+        "--line-spacing",
+        type=float,
+        default=16,
+        help="Line spacing in PDF points for text-file layout (default: 16).",
     )
     parser.add_argument(
         "--inner-margin",
         type=float,
         default=0,
         help="Gap between the two panels in each spread (points, default: 0).",
+    )
+    parser.add_argument(
+        "--sheet-layout",
+        type=str.upper,
+        choices=SHEET_LAYOUTS,
+        default="BOOKLET",
+        help="Sheet layout: BOOKLET for normal 2-up, FOUR_UP for two pages per half-sheet.",
     )
     parser.add_argument(
         "--signature-size",
@@ -154,9 +232,10 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 def ensure_reportlab() -> None:
     try:
         from reportlab.pdfgen import canvas  # noqa: F401
+        from reportlab.platypus import SimpleDocTemplate  # noqa: F401
     except Exception as exc:  # pragma: no cover
         raise RuntimeError(
-            "--add-page-numbers requires reportlab. Install with: python -m pip install reportlab"
+            "This feature requires reportlab. Install with: python -m pip install reportlab"
         ) from exc
 
 
@@ -220,16 +299,119 @@ def place_page_on_panel(target_page, source_page, panel_x: float, panel_width: f
     target_page.merge_transformed_page(source_page, transform)
 
 
-def build_layout(first_size: tuple[float, float], paper_size: str, inner_margin: float) -> LayoutOptions:
+def place_page_rotated_in_cell(
+    target_page,
+    source_page,
+    cell_x: float,
+    cell_y: float,
+    cell_width: float,
+    cell_height: float,
+) -> None:
+    src_w, src_h = page_size_key(source_page)
+    scale = min(cell_width / src_h, cell_height / src_w)
+    rotated_w = src_h * scale
+    rotated_h = src_w * scale
+
+    dx = cell_x + (cell_width - rotated_w) / 2
+    dy = cell_y + (cell_height - rotated_h) / 2 + rotated_h
+
+    transform = Transformation().scale(scale, scale).rotate(-90).translate(tx=dx, ty=dy)
+    target_page.merge_transformed_page(source_page, transform)
+
+
+def build_four_up_number_overlay(
+    sheet_width: float,
+    sheet_height: float,
+    cell_width: float,
+    cell_height: float,
+    inner_margin: float,
+    numbers: tuple[Optional[int], Optional[int], Optional[int], Optional[int]],
+    font_size: float,
+    bottom_margin: float,
+):
+    from reportlab.pdfgen import canvas
+
+    packet = BytesIO()
+    c = canvas.Canvas(packet, pagesize=(sheet_width, sheet_height))
+    c.setFont("Helvetica", font_size)
+
+    positions = (
+        (cell_width / 2, cell_height + bottom_margin),
+        (cell_width + inner_margin + (cell_width / 2), cell_height + bottom_margin),
+        (cell_width / 2, bottom_margin),
+        (cell_width + inner_margin + (cell_width / 2), bottom_margin),
+    )
+    for number, (x, y) in zip(numbers, positions):
+        if number is not None:
+            c.drawCentredString(x, y, str(number))
+
+    c.save()
+    packet.seek(0)
+    return PdfReader(packet).pages[0]
+
+
+def build_layout(
+    first_size: tuple[float, float],
+    paper_size: str,
+    inner_margin: float,
+    sheet_layout: str = "BOOKLET",
+    paper_width: float | None = None,
+    paper_height: float | None = None,
+    paper_unit: str = "PT",
+) -> LayoutOptions:
     if inner_margin < 0:
         raise ValueError("--inner-margin must be zero or positive.")
 
     if paper_size == "AUTO":
         panel_w, panel_h = first_size
     else:
-        panel_w, panel_h = PAPER_SIZES[paper_size]
+        panel_w, panel_h = resolve_page_size(
+            paper_size,
+            custom_width=paper_width,
+            custom_height=paper_height,
+            custom_unit=paper_unit,
+        )
 
-    return LayoutOptions(panel_width=panel_w, panel_height=panel_h, inner_margin=inner_margin)
+    if sheet_layout not in SHEET_LAYOUTS:
+        raise ValueError(f"--sheet-layout must be one of: {', '.join(SHEET_LAYOUTS)}")
+
+    return LayoutOptions(
+        panel_width=panel_w,
+        panel_height=panel_h,
+        inner_margin=inner_margin,
+        sheet_layout=sheet_layout,
+    )
+
+
+def load_source_document(
+    input_path: Path,
+    text_page_size: str,
+    text_page_width: float | None,
+    text_page_height: float | None,
+    text_page_unit: str,
+    body_font_size: float,
+    text_margin: float,
+    line_spacing: float,
+) -> SourceDocument:
+    suffix = input_path.suffix.lower()
+    if suffix == ".txt":
+        ensure_reportlab()
+        text = input_path.read_text(encoding="utf-8")
+        rendered_pdf = render_text_to_pdf_bytes(
+            text,
+            TextLayoutOptions(
+                page_size=text_page_size,
+                body_font_size=body_font_size,
+                margin=text_margin,
+                line_spacing=line_spacing,
+                custom_width=text_page_width,
+                custom_height=text_page_height,
+                custom_unit=text_page_unit,
+            ),
+        )
+        return SourceDocument(reader=PdfReader(BytesIO(rendered_pdf)), source_label="text")
+
+    return SourceDocument(reader=PdfReader(str(input_path)), source_label="pdf")
 
 
 def impose_booklet_pages(
@@ -296,6 +478,92 @@ def impose_booklet_pages(
     return writer, original_count, padded_count
 
 
+def four_up_groups(padded_count: int) -> list[tuple[int, int, int, int]]:
+    pairs = spread_pairs(padded_count)
+    if padded_count == 4:
+        left, right = pairs
+        return [(left[0], right[0], left[1], right[1])]
+
+    groups: list[tuple[int, int, int, int]] = []
+    for start in range(0, len(pairs), 4):
+        block = pairs[start : start + 4]
+        if len(block) < 4:
+            block += [(padded_count, padded_count)] * (4 - len(block))
+        front_left, back_left, front_right, back_right = block
+        groups.append((front_left[0], front_right[0], front_left[1], front_right[1]))
+        groups.append((back_left[0], back_right[0], back_left[1], back_right[1]))
+    return groups
+
+
+def impose_four_up_pages(
+    pages: list,
+    numbering: NumberingOptions,
+    layout: LayoutOptions,
+    show_map: bool,
+    global_offset: int,
+    total_pages: int,
+    signature_index: int,
+) -> tuple[PdfWriter, int, int]:
+    original_count = len(pages)
+    padded_count = ((original_count + 3) // 4) * 4
+
+    cell_width = layout.panel_height
+    cell_height = layout.panel_width
+    sheet_width = (cell_width * 2) + layout.inner_margin
+    sheet_height = (cell_height * 2) + layout.inner_margin
+
+    writer = PdfWriter()
+    groups = four_up_groups(padded_count)
+
+    if show_map:
+        print(f"Signature {signature_index} 4-up map (top-left, top-right, bottom-left, bottom-right):")
+
+    for sheet_num, group in enumerate(groups, start=1):
+        sheet_page = writer.add_blank_page(width=sheet_width, height=sheet_height)
+        labels = ["blank" if idx >= original_count else str(global_offset + idx + 1) for idx in group]
+
+        if show_map:
+            print(f"  Sheet side {sheet_num}: {', '.join(labels)}")
+
+        cells = (
+            (0, cell_height + layout.inner_margin),
+            (cell_width + layout.inner_margin, cell_height + layout.inner_margin),
+            (0, 0),
+            (cell_width + layout.inner_margin, 0),
+        )
+        for page_idx, (cell_x, cell_y) in zip(group, cells):
+            if page_idx < original_count:
+                place_page_rotated_in_cell(
+                    sheet_page,
+                    pages[page_idx],
+                    cell_x=cell_x,
+                    cell_y=cell_y,
+                    cell_width=cell_width,
+                    cell_height=cell_height,
+                )
+
+        if numbering.enabled:
+            numbers = tuple(
+                number_for_index(global_offset + idx, total_pages, numbering.start_number)
+                if idx < original_count
+                else None
+                for idx in group
+            )
+            overlay = build_four_up_number_overlay(
+                sheet_width=sheet_width,
+                sheet_height=sheet_height,
+                cell_width=cell_width,
+                cell_height=cell_height,
+                inner_margin=layout.inner_margin,
+                numbers=numbers,
+                font_size=numbering.font_size,
+                bottom_margin=numbering.bottom_margin,
+            )
+            sheet_page.merge_page(overlay)
+
+    return writer, original_count, padded_count
+
+
 def split_signatures(pages: list, signature_size: int) -> list[list]:
     if signature_size <= 0:
         return [pages]
@@ -353,7 +621,18 @@ def convert_booklet(
     font_size: float = 11,
     bottom_margin: float = 18,
     paper_size: str = "AUTO",
+    paper_width: float | None = None,
+    paper_height: float | None = None,
+    paper_unit: str = "PT",
+    text_page_size: str = "A5",
+    text_page_width: float | None = None,
+    text_page_height: float | None = None,
+    text_page_unit: str = "PT",
+    body_font_size: float = 12,
+    text_margin: float = 54,
+    line_spacing: float = 16,
     inner_margin: float = 0,
+    sheet_layout: str = "BOOKLET",
     signature_size: int = 0,
     combine_signatures: bool = False,
     only_combined: bool = False,
@@ -364,9 +643,19 @@ def convert_booklet(
     if not input_pdf.exists():
         raise FileNotFoundError(f"Input PDF not found: {input_pdf}")
 
-    reader = PdfReader(str(input_pdf))
+    source = load_source_document(
+        input_pdf,
+        text_page_size=text_page_size,
+        text_page_width=text_page_width,
+        text_page_height=text_page_height,
+        text_page_unit=text_page_unit,
+        body_font_size=body_font_size,
+        text_margin=text_margin,
+        line_spacing=line_spacing,
+    )
+    reader = source.reader
     if not reader.pages:
-        raise ValueError("Input PDF has no pages.")
+        raise ValueError(f"Input {source.source_label} has no pages.")
 
     if add_page_numbers:
         ensure_reportlab()
@@ -386,7 +675,15 @@ def convert_booklet(
         font_size=font_size,
         bottom_margin=bottom_margin,
     )
-    layout = build_layout(first_size, paper_size, inner_margin)
+    layout = build_layout(
+        first_size,
+        paper_size,
+        inner_margin,
+        sheet_layout=sheet_layout,
+        paper_width=paper_width,
+        paper_height=paper_height,
+        paper_unit=paper_unit,
+    )
 
     pages = list(reader.pages)
     signatures = split_signatures(pages, signature_size)
@@ -400,15 +697,26 @@ def convert_booklet(
     combined_writer = PdfWriter() if combine_signatures and len(signatures) > 1 else None
 
     for sig_idx, (sig_pages, out_path) in enumerate(zip(signatures, outputs), start=1):
-        writer, original_count, padded_count = impose_booklet_pages(
-            sig_pages,
-            numbering,
-            layout,
-            show_map,
-            global_offset=offset,
-            total_pages=total_pages,
-            signature_index=sig_idx,
-        )
+        if layout.sheet_layout == "FOUR_UP":
+            writer, original_count, padded_count = impose_four_up_pages(
+                sig_pages,
+                numbering,
+                layout,
+                show_map,
+                global_offset=offset,
+                total_pages=total_pages,
+                signature_index=sig_idx,
+            )
+        else:
+            writer, original_count, padded_count = impose_booklet_pages(
+                sig_pages,
+                numbering,
+                layout,
+                show_map,
+                global_offset=offset,
+                total_pages=total_pages,
+                signature_index=sig_idx,
+            )
 
         if combined_writer is not None:
             for page in writer.pages:
@@ -456,7 +764,18 @@ def run(argv: Optional[list[str]] = None) -> int:
         font_size=args.font_size,
         bottom_margin=args.bottom_margin,
         paper_size=args.paper_size,
+        paper_width=args.paper_width,
+        paper_height=args.paper_height,
+        paper_unit=args.paper_unit,
+        text_page_size=args.text_page_size,
+        text_page_width=args.text_page_width,
+        text_page_height=args.text_page_height,
+        text_page_unit=args.text_page_unit,
+        body_font_size=args.body_font_size,
+        text_margin=args.text_margin,
+        line_spacing=args.line_spacing,
         inner_margin=args.inner_margin,
+        sheet_layout=args.sheet_layout,
         signature_size=args.signature_size,
         combine_signatures=args.combine_signatures,
         only_combined=args.only_combined,

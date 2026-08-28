@@ -1,16 +1,18 @@
 # BookletCreator
 
-BookletCreator turns a regular PDF into a print-ready booklet PDF (imposed for duplex printing, short-edge flip).
+BookletCreator turns a regular PDF or plain text file into a print-ready booklet PDF (imposed for duplex printing, short-edge flip).
 
 ## Features
 
 - Booklet page imposition (correct fold/staple order)
+- Plain text ingestion with automatic page layout
 - Auto padding with blank pages to multiples of 4
 - Optional page numbers
 - Accepts pasted Unicode dashes in CLI flags
-- Optional paper target (`AUTO`, `A4`, `LETTER`)
+- Optional paper target (`AUTO`, `A5`, `A4`, `LETTER`, `HALF_LETTER`, `6X9`)
 - Optional inner margin (gutter) between booklet panels
 - Signature splitting (4, 8, 16 pages, etc.) for stitched sections
+- 4-up signature sheets with two source pages on each half of the sheet
 - Dry-run mode and spread mapping preview
 - Desktop GUI app for non-technical users
 
@@ -33,6 +35,20 @@ This installs two commands:
 
 ```bash
 bookletcreator input.pdf
+```
+
+### CLI: create a booklet from a text file
+
+```bash
+bookletcreator manuscript.txt --text-page-size 6X9 --body-font-size 12 --text-margin 54 --line-spacing 16
+```
+
+### CLI: custom page dimensions
+
+You can enter custom sizes in `pt`, `in`, `cm`, or `mm`.
+
+```bash
+bookletcreator manuscript.txt --text-page-size CUSTOM --text-page-width 12.7 --text-page-height 20.32 --text-page-unit CM --paper-size CUSTOM --paper-width 127 --paper-height 203.2 --paper-unit MM
 ```
 
 ### CLI: with output path and page numbers
@@ -61,6 +77,14 @@ To produce only a single combined PDF (no per-signature files):
 bookletcreator input.pdf --signature-size 16 --only-combined
 ```
 
+### CLI: 4-up signature sheets
+
+```bash
+bookletcreator input.pdf --signature-size 16 --sheet-layout FOUR_UP
+```
+
+This creates sheets with four source pages per printed side: top-left, top-right, bottom-left, and bottom-right.
+
 ### CLI: custom layout and preview
 
 ```bash
@@ -73,7 +97,7 @@ bookletcreator input.pdf --paper-size A4 --inner-margin 10 --show-map --dry-run
 bookletcreator-gui
 ```
 
-Then select input/output files, adjust options, and click **Create Booklet**.
+Then select a PDF or `.txt` file, adjust the book/page settings, and click **Create Booklet**.
 
 ### Windows local script fallback
 
@@ -87,8 +111,19 @@ python .\booklet_maker.py .\input.pdf --add-page-numbers
 - `--start-number N`: first displayed page number (default `1`)
 - `--font-size N`: page number font size (default `11`)
 - `--bottom-margin N`: number position from bottom in points (default `18`)
-- `--paper-size {AUTO,A4,LETTER}`: panel paper size target
+- `--paper-size {AUTO,CUSTOM,A5,A4,LETTER,HALF_LETTER,6X9}`: panel paper size target
+- `--paper-width N`: custom panel width when using `CUSTOM`
+- `--paper-height N`: custom panel height when using `CUSTOM`
+- `--paper-unit {PT,IN,CM,MM}`: unit for custom booklet dimensions
+- `--text-page-size {CUSTOM,A5,A4,LETTER,HALF_LETTER,6X9}`: source page size for text input
+- `--text-page-width N`: custom text page width when using `CUSTOM`
+- `--text-page-height N`: custom text page height when using `CUSTOM`
+- `--text-page-unit {PT,IN,CM,MM}`: unit for custom text-page dimensions
+- `--body-font-size N`: body text font size for text input
+- `--text-margin N`: source page margin for text input
+- `--line-spacing N`: line spacing for text input
 - `--inner-margin N`: gap between left/right panel in points
+- `--sheet-layout {BOOKLET,FOUR_UP}`: normal 2-up booklet layout or 4-up signature sheets
 - `--signature-size N`: split into N-page signatures (multiple of 4)
 - `--combine-signatures`: when signatures are used, also write a combined PDF
 - `--only-combined`: when signatures are used, write only the combined PDF
@@ -143,4 +178,7 @@ This repo includes:
 ## Notes
 
 - Input PDF pages must all be the same size.
+- Text input must be UTF-8 encoded plain text.
+- Custom widths and heights can be specified in `PT`, `IN`, `CM`, or `MM`.
+- `72` points = `1` inch.
 - Mixed page sizes are rejected with a clear error.

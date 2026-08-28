@@ -7,7 +7,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
-- Placeholder for upcoming features.
+- 4-up signature sheet layout via `--sheet-layout FOUR_UP`.
+- Tabbed GUI layout with grouped settings for files, layout, text input, page numbers, and output.
+- Combined-signature output controls, including `--only-combined`.
 
 ## [0.1.0] - 2026-03-08
 
@@ -17,6 +19,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Optional page numbering (`--add-page-numbers`, `--start-number`, `--font-size`, `--bottom-margin`).
 - Paper target options (`--paper-size AUTO|A4|LETTER`).
 - Inner panel margin option (`--inner-margin`).
+- Signature splitting (4, 8, 16 pages, etc.) for stitched sections.
+- 4-up signature sheets with two source pages on each half of the sheet.
+- Combined-signature output controls.
 - Planning and debug options (`--show-map`, `--dry-run`).
 - Unicode-dash normalization for robust CLI argument parsing.
 - Backward-compatible launcher script `booklet_maker.py`.
