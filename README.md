@@ -57,6 +57,12 @@ bookletcreator manuscript.txt --text-page-size CUSTOM --text-page-width 12.7 --t
 bookletcreator input.pdf -o output_booklet.pdf --add-page-numbers
 ```
 
+To leave the cover unnumbered and start numbering on the second source page:
+
+```bash
+bookletcreator input.pdf --add-page-numbers --skip-numbering-pages 1 --start-number 1
+```
+
 ### CLI: signatures (stitched sections)
 
 ```bash
@@ -84,6 +90,7 @@ bookletcreator input.pdf --signature-size 16 --sheet-layout FOUR_UP
 ```
 
 This creates sheets with four source pages per printed side: top-left, top-right, bottom-left, and bottom-right.
+If the final four-up sheet has no reverse side, BookletCreator adds a blank back side so duplex printing stays aligned.
 
 ### CLI: custom layout and preview
 
@@ -109,6 +116,7 @@ python .\booklet_maker.py .\input.pdf --add-page-numbers
 
 - `--add-page-numbers`: draw page numbers on each panel
 - `--start-number N`: first displayed page number (default `1`)
+- `--skip-numbering-pages N`: leave the first N source pages unnumbered
 - `--font-size N`: page number font size (default `11`)
 - `--bottom-margin N`: number position from bottom in points (default `18`)
 - `--paper-size {AUTO,CUSTOM,A5,A4,LETTER,HALF_LETTER,6X9}`: panel paper size target
@@ -135,6 +143,7 @@ python .\booklet_maker.py .\input.pdf --add-page-numbers
 - Duplex printing
 - Flip on short edge
 - Print at 100% scale (or disable "fit to page" in printer dialog)
+- Four-up output is padded with blank back sides when needed for duplex printing.
 
 ## Development
 

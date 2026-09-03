@@ -30,6 +30,7 @@ SHEET_LAYOUTS = ("BOOKLET", "FOUR_UP")
 class NumberingOptions:
     enabled: bool
     start_number: int
+    skip_pages: int
     font_size: float
     bottom_margin: float
 
@@ -108,6 +109,12 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         type=int,
         default=1,
         help="Starting page number when --add-page-numbers is used (default: 1).",
+    )
+    parser.add_argument(
+        "--skip-numbering-pages",
+        type=int,
+        default=0,
+        help="Do not number the first N source pages, useful for covers (default: 0).",
     )
     parser.add_argument(
         "--font-size",
@@ -269,10 +276,10 @@ def page_size_key(page) -> tuple[float, float]:
     return float(box.width), float(box.height)
 
 
-def number_for_index(page_index: int, total_count: int, start_number: int) -> Optional[int]:
-    if page_index >= total_count:
+def number_for_index(page_index: int, total_count: int, start_number: int, skip_pages: int = 0) -> Optional[int]:
+    if page_index >= total_count or page_index < skip_pages:
         return None
-    return start_number + page_index
+    return start_number + page_index - skip_pages
 
 
 def spread_pairs(padded_count: int) -> list[tuple[int, int]]:
@@ -322,10 +329,7 @@ def place_page_rotated_in_cell(
 def build_four_up_number_overlay(
     sheet_width: float,
     sheet_height: float,
-    cell_width: float,
-    cell_height: float,
-    inner_margin: float,
-    numbers: tuple[Optional[int], Optional[int], Optional[int], Optional[int]],
+    placements: tuple[tuple[Optional[int], object, float, float, float, float], ...],
     font_size: float,
     bottom_margin: float,
 ):
@@ -335,15 +339,26 @@ def build_four_up_number_overlay(
     c = canvas.Canvas(packet, pagesize=(sheet_width, sheet_height))
     c.setFont("Helvetica", font_size)
 
-    positions = (
-        (cell_width / 2, cell_height + bottom_margin),
-        (cell_width + inner_margin + (cell_width / 2), cell_height + bottom_margin),
-        (cell_width / 2, bottom_margin),
-        (cell_width + inner_margin + (cell_width / 2), bottom_margin),
-    )
-    for number, (x, y) in zip(numbers, positions):
-        if number is not None:
-            c.drawCentredString(x, y, str(number))
+    for number, page, cell_x, cell_y, cell_width, cell_height in placements:
+        if number is None:
+            continue
+
+        src_w, src_h = page_size_key(page)
+        scale = min(cell_width / src_h, cell_height / src_w)
+        rotated_w = src_h * scale
+        rotated_h = src_w * scale
+
+        dx = cell_x + (cell_width - rotated_w) / 2
+        dy = cell_y + (cell_height - rotated_h) / 2 + rotated_h
+
+        x = dx + (bottom_margin * scale)
+        y = dy - ((src_w * scale) / 2)
+
+        c.saveState()
+        c.translate(x, y)
+        c.rotate(-90)
+        c.drawCentredString(0, 0, str(number))
+        c.restoreState()
 
     c.save()
     packet.seek(0)
@@ -468,8 +483,18 @@ def impose_booklet_pages(
                 spread_width=spread_width,
                 spread_height=spread_height,
                 panel_width=layout.panel_width,
-                left_number=number_for_index(left_global, total_pages, numbering.start_number),
-                right_number=number_for_index(right_global, total_pages, numbering.start_number),
+                left_number=number_for_index(
+                    left_global,
+                    total_pages,
+                    numbering.start_number,
+                    numbering.skip_pages,
+                ),
+                right_number=number_for_index(
+                    right_global,
+                    total_pages,
+                    numbering.start_number,
+                    numbering.skip_pages,
+                ),
                 font_size=numbering.font_size,
                 bottom_margin=numbering.bottom_margin,
             )
@@ -543,23 +568,36 @@ def impose_four_up_pages(
                 )
 
         if numbering.enabled:
-            numbers = tuple(
-                number_for_index(global_offset + idx, total_pages, numbering.start_number)
-                if idx < original_count
-                else None
-                for idx in group
+            placements = tuple(
+                (
+                    number_for_index(
+                        global_offset + page_idx,
+                        total_pages,
+                        numbering.start_number,
+                        numbering.skip_pages,
+                    ),
+                    pages[page_idx],
+                    cell_x,
+                    cell_y,
+                    cell_width,
+                    cell_height,
+                )
+                for page_idx, (cell_x, cell_y) in zip(group, cells)
+                if page_idx < original_count
             )
             overlay = build_four_up_number_overlay(
                 sheet_width=sheet_width,
                 sheet_height=sheet_height,
-                cell_width=cell_width,
-                cell_height=cell_height,
-                inner_margin=layout.inner_margin,
-                numbers=numbers,
+                placements=placements,
                 font_size=numbering.font_size,
                 bottom_margin=numbering.bottom_margin,
             )
             sheet_page.merge_page(overlay)
+
+    if len(writer.pages) % 2:
+        writer.add_blank_page(width=sheet_width, height=sheet_height)
+        if show_map:
+            print(f"  Sheet side {len(writer.pages)}: blank duplex back side")
 
     return writer, original_count, padded_count
 
@@ -618,6 +656,7 @@ def convert_booklet(
     output_pdf: Optional[Path] = None,
     add_page_numbers: bool = False,
     start_number: int = 1,
+    skip_numbering_pages: int = 0,
     font_size: float = 11,
     bottom_margin: float = 18,
     paper_size: str = "AUTO",
@@ -659,6 +698,8 @@ def convert_booklet(
 
     if add_page_numbers:
         ensure_reportlab()
+    if skip_numbering_pages < 0:
+        raise ValueError("--skip-numbering-pages must be zero or positive.")
 
     first_size = page_size_key(reader.pages[0])
     mixed_sizes = [i + 1 for i, p in enumerate(reader.pages) if page_size_key(p) != first_size]
@@ -672,6 +713,7 @@ def convert_booklet(
     numbering = NumberingOptions(
         enabled=add_page_numbers,
         start_number=start_number,
+        skip_pages=skip_numbering_pages,
         font_size=font_size,
         bottom_margin=bottom_margin,
     )
@@ -761,6 +803,7 @@ def run(argv: Optional[list[str]] = None) -> int:
         output_pdf=args.output,
         add_page_numbers=args.add_page_numbers,
         start_number=args.start_number,
+        skip_numbering_pages=args.skip_numbering_pages,
         font_size=args.font_size,
         bottom_margin=args.bottom_margin,
         paper_size=args.paper_size,

@@ -12,7 +12,7 @@ Copy this into the GitHub Release description and replace placeholders.
 ### What's New
 - Normal 2-up booklet layout with automatic blank-page padding.
 - 4-up signature sheet layout with `--sheet-layout FOUR_UP`.
-- Optional page numbering controls.
+- Optional page numbering controls, including cover-page skipping with `--skip-numbering-pages`.
 - Signature controls: `--signature-size`, `--combine-signatures`, and `--only-combined`.
 - Custom paper and text-page sizes using points, inches, centimeters, or millimeters.
 - Tabbed GUI with grouped layout, text, numbering, and output settings.
@@ -31,6 +31,7 @@ python -m pip install --upgrade bookletcreator
 
 ```bash
 bookletcreator input.pdf --add-page-numbers
+bookletcreator input.pdf --add-page-numbers --skip-numbering-pages 1
 bookletcreator input.pdf --signature-size 16 --sheet-layout FOUR_UP --only-combined
 bookletcreator-gui
 ```

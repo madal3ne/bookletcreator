@@ -22,6 +22,7 @@ class BookletCreatorGUI:
         self.output_path = tk.StringVar()
         self.add_numbers = tk.BooleanVar(value=False)
         self.start_number = tk.StringVar(value="1")
+        self.skip_numbering_pages = tk.StringVar(value="0")
         self.number_font_size = tk.StringVar(value="11")
         self.bottom_margin = tk.StringVar(value="18")
         self.paper_size = tk.StringVar(value="AUTO")
@@ -101,10 +102,12 @@ class BookletCreatorGUI:
         ttk.Checkbutton(numbering, text="Add page numbers", variable=self.add_numbers).grid(row=0, column=0, columnspan=3, sticky="w")
         ttk.Label(numbering, text="Start").grid(row=1, column=0, sticky="w", pady=(10, 0))
         ttk.Entry(numbering, textvariable=self.start_number, width=8).grid(row=2, column=0, padx=(0, 12))
-        ttk.Label(numbering, text="Number Font").grid(row=1, column=1, sticky="w", pady=(10, 0))
-        ttk.Entry(numbering, textvariable=self.number_font_size, width=12).grid(row=2, column=1, padx=(0, 12))
-        ttk.Label(numbering, text="Bottom Margin").grid(row=1, column=2, sticky="w", pady=(10, 0))
-        ttk.Entry(numbering, textvariable=self.bottom_margin, width=12).grid(row=2, column=2)
+        ttk.Label(numbering, text="Skip First Pages").grid(row=1, column=1, sticky="w", pady=(10, 0))
+        ttk.Entry(numbering, textvariable=self.skip_numbering_pages, width=12).grid(row=2, column=1, padx=(0, 12))
+        ttk.Label(numbering, text="Number Font").grid(row=1, column=2, sticky="w", pady=(10, 0))
+        ttk.Entry(numbering, textvariable=self.number_font_size, width=12).grid(row=2, column=2, padx=(0, 12))
+        ttk.Label(numbering, text="Bottom Margin").grid(row=1, column=3, sticky="w", pady=(10, 0))
+        ttk.Entry(numbering, textvariable=self.bottom_margin, width=12).grid(row=2, column=3)
 
         output = ttk.Frame(notebook, padding=12)
         notebook.add(output, text="Output")
@@ -168,6 +171,7 @@ class BookletCreatorGUI:
                 output_pdf=Path(out_path) if out_path else None,
                 add_page_numbers=self.add_numbers.get(),
                 start_number=int(self.start_number.get()),
+                skip_numbering_pages=int(self.skip_numbering_pages.get()),
                 font_size=float(self.number_font_size.get()),
                 bottom_margin=float(self.bottom_margin.get()),
                 paper_size=self.paper_size.get(),

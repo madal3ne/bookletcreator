@@ -5,7 +5,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pypdf import PdfReader, PdfWriter
 
-from bookletcreator.cli import build_layout, convert_booklet, four_up_groups, normalize_cli_args, run, spread_pairs
+from bookletcreator.cli import (
+    build_layout,
+    convert_booklet,
+    four_up_groups,
+    normalize_cli_args,
+    number_for_index,
+    run,
+    spread_pairs,
+)
 from bookletcreator.text_layout import convert_dimension_to_points, resolve_page_size
 
 
@@ -26,6 +34,12 @@ def test_four_up_groups_for_sixteen_pages():
 
 def test_four_up_groups_for_four_pages():
     assert four_up_groups(4) == [(3, 1, 0, 2)]
+
+
+def test_number_for_index_can_skip_cover_pages():
+    assert number_for_index(0, total_count=10, start_number=1, skip_pages=1) is None
+    assert number_for_index(1, total_count=10, start_number=1, skip_pages=1) == 1
+    assert number_for_index(2, total_count=10, start_number=1, skip_pages=1) == 2
 
 
 def test_run_dry_run(tmp_path):
@@ -79,6 +93,26 @@ def test_convert_booklet_four_up_dry_run(tmp_path):
 
     assert combined is None
     assert results[0].output_spreads == 4
+
+
+def test_convert_booklet_four_up_adds_blank_duplex_back_side(tmp_path):
+    input_pdf = tmp_path / "one-page.pdf"
+    output_pdf = tmp_path / "one-page-booklet.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=420, height=595)
+    with input_pdf.open("wb") as f:
+        writer.write(f)
+
+    results, combined = convert_booklet(
+        input_pdf=input_pdf,
+        output_pdf=output_pdf,
+        sheet_layout="FOUR_UP",
+    )
+
+    assert combined is None
+    assert results[0].output_spreads == 2
+    output_reader = PdfReader(str(output_pdf))
+    assert len(output_reader.pages) == 2
 
 
 def test_run_dry_run_with_text_input(tmp_path):

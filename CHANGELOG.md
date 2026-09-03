@@ -10,13 +10,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - 4-up signature sheet layout via `--sheet-layout FOUR_UP`.
 - Tabbed GUI layout with grouped settings for files, layout, text input, page numbers, and output.
 - Combined-signature output controls, including `--only-combined`.
+- Page-numbering offset via `--skip-numbering-pages`.
 
 ## [0.1.0] - 2026-03-08
 
 ### Added
 - Core booklet PDF imposition engine.
 - CLI command `bookletcreator` for converting PDFs to booklet layout.
-- Optional page numbering (`--add-page-numbers`, `--start-number`, `--font-size`, `--bottom-margin`).
+- Optional page numbering (`--add-page-numbers`, `--start-number`, `--skip-numbering-pages`, `--font-size`, `--bottom-margin`).
 - Paper target options (`--paper-size AUTO|A4|LETTER`).
 - Inner panel margin option (`--inner-margin`).
 - Signature splitting (4, 8, 16 pages, etc.) for stitched sections.
