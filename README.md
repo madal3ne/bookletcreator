@@ -92,6 +92,12 @@ bookletcreator input.pdf --signature-size 16 --sheet-layout FOUR_UP
 This creates sheets with four source pages per printed side: top-left, top-right, bottom-left, and bottom-right.
 If the final four-up sheet has no reverse side, BookletCreator adds a blank back side so duplex printing stays aligned.
 
+For a 4-page partial signature, you can split the pages across front and back instead:
+
+```bash
+bookletcreator input.pdf --signature-size 4 --sheet-layout FOUR_UP --four-up-partial-strategy SPLIT_ACROSS_SIDES
+```
+
 ### CLI: custom layout and preview
 
 ```bash
@@ -132,6 +138,7 @@ python .\booklet_maker.py .\input.pdf --add-page-numbers
 - `--line-spacing N`: line spacing for text input
 - `--inner-margin N`: gap between left/right panel in points
 - `--sheet-layout {BOOKLET,FOUR_UP}`: normal 2-up booklet layout or 4-up signature sheets
+- `--four-up-partial-strategy {BLANK_BACK,SPLIT_ACROSS_SIDES}`: how 4-page four-up signatures use duplex sides
 - `--signature-size N`: split into N-page signatures (multiple of 4)
 - `--combine-signatures`: when signatures are used, also write a combined PDF
 - `--only-combined`: when signatures are used, write only the combined PDF

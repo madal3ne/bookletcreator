@@ -24,6 +24,7 @@ from .text_layout import (
 
 PAPER_SIZES = PAGE_SIZES
 SHEET_LAYOUTS = ("BOOKLET", "FOUR_UP")
+FOUR_UP_PARTIAL_STRATEGIES = ("BLANK_BACK", "SPLIT_ACROSS_SIDES")
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class LayoutOptions:
     panel_height: float
     inner_margin: float
     sheet_layout: str
+    four_up_partial_strategy: str
 
 
 @dataclass(frozen=True)
@@ -208,6 +210,13 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help="Sheet layout: BOOKLET for normal 2-up, FOUR_UP for two pages per half-sheet.",
     )
     parser.add_argument(
+        "--four-up-partial-strategy",
+        type=str.upper,
+        choices=FOUR_UP_PARTIAL_STRATEGIES,
+        default="BLANK_BACK",
+        help="How FOUR_UP handles a 4-page partial signature: BLANK_BACK or SPLIT_ACROSS_SIDES.",
+    )
+    parser.add_argument(
         "--signature-size",
         type=int,
         default=0,
@@ -370,6 +379,7 @@ def build_layout(
     paper_size: str,
     inner_margin: float,
     sheet_layout: str = "BOOKLET",
+    four_up_partial_strategy: str = "BLANK_BACK",
     paper_width: float | None = None,
     paper_height: float | None = None,
     paper_unit: str = "PT",
@@ -389,12 +399,17 @@ def build_layout(
 
     if sheet_layout not in SHEET_LAYOUTS:
         raise ValueError(f"--sheet-layout must be one of: {', '.join(SHEET_LAYOUTS)}")
+    if four_up_partial_strategy not in FOUR_UP_PARTIAL_STRATEGIES:
+        raise ValueError(
+            f"--four-up-partial-strategy must be one of: {', '.join(FOUR_UP_PARTIAL_STRATEGIES)}"
+        )
 
     return LayoutOptions(
         panel_width=panel_w,
         panel_height=panel_h,
         inner_margin=inner_margin,
         sheet_layout=sheet_layout,
+        four_up_partial_strategy=four_up_partial_strategy,
     )
 
 
@@ -503,10 +518,16 @@ def impose_booklet_pages(
     return writer, original_count, padded_count
 
 
-def four_up_groups(padded_count: int) -> list[tuple[int, int, int, int]]:
+def four_up_groups(
+    padded_count: int,
+    partial_strategy: str = "BLANK_BACK",
+) -> list[tuple[int, int, int, int]]:
     pairs = spread_pairs(padded_count)
     if padded_count == 4:
         left, right = pairs
+        if partial_strategy == "SPLIT_ACROSS_SIDES":
+            blank = padded_count
+            return [(left[0], blank, left[1], blank), (right[0], blank, right[1], blank)]
         return [(left[0], right[0], left[1], right[1])]
 
     groups: list[tuple[int, int, int, int]] = []
@@ -538,7 +559,7 @@ def impose_four_up_pages(
     sheet_height = (cell_height * 2) + layout.inner_margin
 
     writer = PdfWriter()
-    groups = four_up_groups(padded_count)
+    groups = four_up_groups(padded_count, layout.four_up_partial_strategy)
 
     if show_map:
         print(f"Signature {signature_index} 4-up map (top-left, top-right, bottom-left, bottom-right):")
@@ -672,6 +693,7 @@ def convert_booklet(
     line_spacing: float = 16,
     inner_margin: float = 0,
     sheet_layout: str = "BOOKLET",
+    four_up_partial_strategy: str = "BLANK_BACK",
     signature_size: int = 0,
     combine_signatures: bool = False,
     only_combined: bool = False,
@@ -722,6 +744,7 @@ def convert_booklet(
         paper_size,
         inner_margin,
         sheet_layout=sheet_layout,
+        four_up_partial_strategy=four_up_partial_strategy,
         paper_width=paper_width,
         paper_height=paper_height,
         paper_unit=paper_unit,
@@ -819,6 +842,7 @@ def run(argv: Optional[list[str]] = None) -> int:
         line_spacing=args.line_spacing,
         inner_margin=args.inner_margin,
         sheet_layout=args.sheet_layout,
+        four_up_partial_strategy=args.four_up_partial_strategy,
         signature_size=args.signature_size,
         combine_signatures=args.combine_signatures,
         only_combined=args.only_combined,

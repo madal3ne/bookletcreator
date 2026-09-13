@@ -11,6 +11,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Tabbed GUI layout with grouped settings for files, layout, text input, page numbers, and output.
 - Combined-signature output controls, including `--only-combined`.
 - Page-numbering offset via `--skip-numbering-pages`.
+- Four-up partial-signature strategies via `--four-up-partial-strategy`.
 
 ## [0.1.0] - 2026-03-08
 

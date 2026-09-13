@@ -4,7 +4,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from .cli import PAPER_SIZES, SHEET_LAYOUTS, convert_booklet
+from .cli import FOUR_UP_PARTIAL_STRATEGIES, PAPER_SIZES, SHEET_LAYOUTS, convert_booklet
 from .text_layout import SIZE_UNITS
 
 
@@ -38,6 +38,7 @@ class BookletCreatorGUI:
         self.line_spacing = tk.StringVar(value="16")
         self.inner_margin = tk.StringVar(value="0")
         self.sheet_layout = tk.StringVar(value="BOOKLET")
+        self.four_up_partial_strategy = tk.StringVar(value="BLANK_BACK")
         self.signature_size = tk.StringVar(value="None")
         self.combine_signatures = tk.BooleanVar(value=False)
         self.only_combined = tk.BooleanVar(value=False)
@@ -73,12 +74,20 @@ class BookletCreatorGUI:
         ttk.Combobox(booklet_layout, textvariable=self.sheet_layout, values=list(SHEET_LAYOUTS), width=14, state="readonly").grid(row=1, column=2, padx=(0, 12))
         ttk.Label(booklet_layout, text="Signature Size").grid(row=0, column=3, sticky="w")
         ttk.Combobox(booklet_layout, textvariable=self.signature_size, values=SIGNATURE_CHOICES, width=12, state="readonly").grid(row=1, column=3)
-        ttk.Label(booklet_layout, text="Custom Width").grid(row=2, column=0, sticky="w", pady=(10, 0))
-        ttk.Entry(booklet_layout, textvariable=self.paper_width, width=12).grid(row=3, column=0, padx=(0, 12))
-        ttk.Label(booklet_layout, text="Custom Height").grid(row=2, column=1, sticky="w", pady=(10, 0))
-        ttk.Entry(booklet_layout, textvariable=self.paper_height, width=12).grid(row=3, column=1, padx=(0, 12))
-        ttk.Label(booklet_layout, text="Unit").grid(row=2, column=2, sticky="w", pady=(10, 0))
-        ttk.Combobox(booklet_layout, textvariable=self.paper_unit, values=list(SIZE_UNITS.keys()), width=10, state="readonly").grid(row=3, column=2, padx=(0, 12))
+        ttk.Label(booklet_layout, text="4-up Partial").grid(row=2, column=0, sticky="w", pady=(10, 0))
+        ttk.Combobox(
+            booklet_layout,
+            textvariable=self.four_up_partial_strategy,
+            values=list(FOUR_UP_PARTIAL_STRATEGIES),
+            width=20,
+            state="readonly",
+        ).grid(row=3, column=0, padx=(0, 12))
+        ttk.Label(booklet_layout, text="Custom Width").grid(row=2, column=1, sticky="w", pady=(10, 0))
+        ttk.Entry(booklet_layout, textvariable=self.paper_width, width=12).grid(row=3, column=1, padx=(0, 12))
+        ttk.Label(booklet_layout, text="Custom Height").grid(row=2, column=2, sticky="w", pady=(10, 0))
+        ttk.Entry(booklet_layout, textvariable=self.paper_height, width=12).grid(row=3, column=2, padx=(0, 12))
+        ttk.Label(booklet_layout, text="Unit").grid(row=2, column=3, sticky="w", pady=(10, 0))
+        ttk.Combobox(booklet_layout, textvariable=self.paper_unit, values=list(SIZE_UNITS.keys()), width=10, state="readonly").grid(row=3, column=3, padx=(0, 12))
 
         text_layout = ttk.Frame(notebook, padding=12)
         notebook.add(text_layout, text="Text Input")
@@ -187,6 +196,7 @@ class BookletCreatorGUI:
                 line_spacing=float(self.line_spacing.get()),
                 inner_margin=float(self.inner_margin.get()),
                 sheet_layout=self.sheet_layout.get(),
+                four_up_partial_strategy=self.four_up_partial_strategy.get(),
                 signature_size=self._signature_value(),
                 combine_signatures=self.combine_signatures.get(),
                 only_combined=self.only_combined.get(),

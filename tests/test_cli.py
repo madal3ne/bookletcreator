@@ -36,6 +36,10 @@ def test_four_up_groups_for_four_pages():
     assert four_up_groups(4) == [(3, 1, 0, 2)]
 
 
+def test_four_up_groups_for_four_pages_split_across_sides():
+    assert four_up_groups(4, partial_strategy="SPLIT_ACROSS_SIDES") == [(3, 4, 0, 4), (1, 4, 2, 4)]
+
+
 def test_number_for_index_can_skip_cover_pages():
     assert number_for_index(0, total_count=10, start_number=1, skip_pages=1) is None
     assert number_for_index(1, total_count=10, start_number=1, skip_pages=1) == 1
@@ -107,6 +111,28 @@ def test_convert_booklet_four_up_adds_blank_duplex_back_side(tmp_path):
         input_pdf=input_pdf,
         output_pdf=output_pdf,
         sheet_layout="FOUR_UP",
+    )
+
+    assert combined is None
+    assert results[0].output_spreads == 2
+    output_reader = PdfReader(str(output_pdf))
+    assert len(output_reader.pages) == 2
+
+
+def test_convert_booklet_four_up_split_partial_uses_two_sides(tmp_path):
+    input_pdf = tmp_path / "four-pages.pdf"
+    output_pdf = tmp_path / "four-pages-booklet.pdf"
+    writer = PdfWriter()
+    for _ in range(4):
+        writer.add_blank_page(width=420, height=595)
+    with input_pdf.open("wb") as f:
+        writer.write(f)
+
+    results, combined = convert_booklet(
+        input_pdf=input_pdf,
+        output_pdf=output_pdf,
+        sheet_layout="FOUR_UP",
+        four_up_partial_strategy="SPLIT_ACROSS_SIDES",
     )
 
     assert combined is None
